@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tx Hash Lookup</title>
+    <!-- Tailwind CSS via CDN -->
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <style>
+        .arrow-container {
+            position: relative;
+            width: 100px; /* Adjust this to the desired length of the arrow */
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto;
+            animation: move 3s infinite alternate; /* Apply animation to the container */
+        }
+
+        .arrow-shaft {
+            width: 80px; /* Adjust according to the arrow's length */
+            height: 4px;
+            background-color: black;
+            position: relative;
+            z-index: 1;
+        }
+
+        .arrow-head {
+            width: 0;
+            height: 0;
+            border-top: 10px solid transparent;
+            border-bottom: 10px solid transparent;
+            border-left: 10px solid black;
+            position: relative;
+            left: -5px;
+            z-index: 2;
+        }
+
+        @keyframes move {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(10px); }
+        }
+
+        .logo img {
+            height: 50px; /* Adjust the logo size */
+            width: auto;
+        }
+
+        /* Center Bottom Container for Token and Timestamp */
+        .bottom-container {
+            background-color: white;
+            padding: 20px 40px; /* Increased padding for a larger container */
+            border-radius: 12px; /* Slightly more rounded corners */
+            box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column; /* Stack items vertically */
+            justify-content: center;
+            align-items: center;
+            width: 400px; /* Increased width for a larger container */
+            margin-top: 20px; /* Space between the bottom container and the above elements */
+        }
+
+        .bottom-container span {
+            font-weight: bold;
+            display: block; /* Ensure each span is on its own line */
+            color: #4A5568; /* Text color */
+            margin: 5px 0; /* Space between lines */
+            text-align: center;
+            width: 100%; /* Make sure it spans the full width */
+        }
+
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <!-- Logo -->
+    <div class="absolute top-0 left-0 m-4">
+        <img src="/static/logo.png" alt="Logo" class="h-16 w-auto">
+    </div>
+
+    <!-- Alert Container -->
+    <div id="alertContainer" class="max-w-lg mx-auto bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative hidden" role="alert">
+        <span class="block sm:inline" id="resultError"></span>
+        <span class="absolute top-0 bottom-0 right-0 px-4 py-3">
+            <svg class="fill-current h-6 w-6 text-red-500" role="button" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" id="closeButton">
+                <title>Close</title>
+                <path d="M14.348 14.849a1.2 1.2 0 0 1-1.697 0L10 11.819l-2.651 3.029a1.2 1.2 0 1 1-1.697-1.697l2.758-3.15-2.759-3.152a1.2 1.2 0 1 1 1.697-1.697L10 8.183l2.651-3.031a1.2 1.2 0 1 1 1.697 1.697l-2.758 3.152 2.758 3.15a1.2 1.2 0 0 1 0 1.698z"/>
+            </svg>
+        </span>
+    </div>
+
+    <!-- Container -->
+    <div class="flex flex-col min-h-screen justify-top items-center py-40" id="Base">
+        
+        <!-- Search Box -->
+        <div class="w-full max-w-2xl mb-12">
+            <form id="txHashForm" class="flex justify-center">
+                <input id="txHashInput" type="text" placeholder="Enter transaction hash..." class="flex-grow px-8 py-5 text-lg border border-gray-300 rounded-l-md focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                <button type="submit" class="px-8 py-5 bg-blue-600 text-white rounded-r-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg font-semibold" style="background-color: #c1397b;" id="SearchBtn">
+                    Search
+                </button>
+            </form>
+        </div>
+
+        <!-- Result Section -->
+        <div class="flex justify-between items-center w-full max-w-6xl">
+            <!-- Source Transaction Information -->
+            <div class="bg-white p-8 rounded-lg shadow-lg w-96 h-auto">
+                <h2 class="text-2xl font-bold text-gray-800 mb-4">Source Transaction</h2>
+                <div class="mb-4"><span class="font-semibold text-gray-700">Chain:</span> <span id="srcChain" class="text-gray-900"></span></div>
+                <div class="mb-4"><span class="font-semibold text-gray-700">Address:</span> <span id="srcAddress" class="hash-display text-blue-600 cursor-pointer hover:underline" onclick="copyToClipboard('srcAddressFull')"></span><input type="hidden" id="srcAddressFull"></div>
+                <div class="mb-4"><span class="font-semibold text-gray-700">Transaction Hash:</span> <span id="srcTx" class="hash-display text-blue-600 cursor-pointer hover:underline" onclick="copyToClipboard('srcTxFull')"></span><input type="hidden" id="srcTxFull"></div>
+                <div class="mb-4"><span class="font-semibold text-gray-700">Token Sent:</span> <span id="tokenSent" class="text-gray-900"></span></div>
+            </div>
+            <!-- Arrow Animation -->
+            <div class="relative">
+                <div class="arrow-container">
+                    <div class="arrow-shaft"></div>
+                    <div class="arrow-head"></div>
+                </div>
+                <!-- Timestamp under the arrow -->
+                <div id="layerZeroTimestamp" class="text-center text-gray-700 mt-2"></div>
+            </div>
+            <!-- Destination Transaction Information -->
+            <div class="bg-white p-8 rounded-lg shadow-lg w-96 h-auto">
+                <h2 class="text-2xl font-bold text-gray-800 mb-4">Destination Transaction</h2>
+                <div class="mb-4"><span class="font-semibold text-gray-700">Chain:</span> <span id="dstChain" class="text-gray-900"></span></div>
+                <div class="mb-4"><span class="font-semibold text-gray-700">Address:</span> <span id="dstAddress" class="hash-display text-blue-600 cursor-pointer hover:underline" onclick="copyToClipboard('dstAddressFull')"></span><input type="hidden" id="dstAddressFull"></div>
+                <div class="mb-4"><span class="font-semibold text-gray-700">Transaction Hash:</span> <span id="dstTx" class="hash-display text-blue-600 cursor-pointer hover:underline" onclick="copyToClipboard('dstTxFull')"></span><input type="hidden" id="dstTxFull"></div>
+                <div class="mb-4"><span class="font-semibold text-gray-700">Token Received:</span> <span id="tokenReceived" class="text-gray-900"></span></div>
+            </div>
+        </div>
+        <!-- Center Bottom Container -->
+        <div class="bottom-container">
+            <span>Token Received: <span id="bottomTokenReceived"></span></span>
+            <span>Amount Transferred: <span id="buttomAmount"></span></span>
+            <span>Destination Token Symbol: <span id="buttomDstTokenSymbol"></span></span>
+            <span>Timestamp: <span id="bottomTimestamp"></span></span>
+        </div>
+    </div>
+
+    <script>
+        function abbreviateHash(hash) {
+            if (hash != null && hash.length > 12) {
+                return hash.slice(0, 6) + '...' + hash.slice(-6);
+            }
+            return hash;
+        }
+
+        function copyToClipboard(id) {
+            const fullHash = document.getElementById(id).value;
+
+            // Create a temporary textarea element
+            const tempTextarea = document.createElement('textarea');
+            tempTextarea.value = fullHash;
+            document.body.appendChild(tempTextarea);
+
+            // Select the text and copy it to the clipboard
+            tempTextarea.select();
+            document.execCommand('copy');
+
+            // Remove the temporary element
+            document.body.removeChild(tempTextarea);
+
+            // Visual feedback (tooltip)
+            const copiedTooltip = document.createElement('div');
+            copiedTooltip.textContent = 'Copied!';
+            copiedTooltip.className = 'absolute bg-green-500 text-white text-sm px-2 py-1 rounded shadow-md';
+            document.body.appendChild(copiedTooltip);
+
+            // Position the tooltip
+            const targetElement = document.getElementById(id).parentElement;
+            const rect = targetElement.getBoundingClientRect();
+            copiedTooltip.style.left = `${rect.left + (rect.width / 2) - (copiedTooltip.offsetWidth / 2)}px`;
+            copiedTooltip.style.top = `${rect.top - copiedTooltip.offsetHeight - 5}px`;
+
+            // Remove the tooltip after a short delay
+            setTimeout(() => {
+                document.body.removeChild(copiedTooltip);
+            }, 1000);
+        }
+
+        function resetToInitialState() {
+            document.getElementById('srcChain').textContent = '';
+            document.getElementById('dstChain').textContent = '';
+            document.getElementById('srcAddress').textContent = '';
+            document.getElementById('srcAddressFull').value = '';
+            document.getElementById('dstAddress').textContent = '';
+            document.getElementById('dstAddressFull').value = '';
+            document.getElementById('srcTx').textContent = '';
+            document.getElementById('srcTxFull').value = '';
+            document.getElementById('dstTx').textContent = '';
+            document.getElementById('dstTxFull').value = '';
+            document.getElementById('tokenSent').textContent = '';
+            document.getElementById('tokenReceived').textContent = '';
+            document.getElementById('bottomTokenReceived').textContent = '';
+            document.getElementById('bottomTimestamp').textContent = '';
+            document.getElementById('buttomAmount').textContent = '';
+            document.getElementById('buttomDstTokenSymbol').textContent = '';
+        }
+
+        function showAlert(message) {
+            const alertContainer = document.getElementById('alertContainer');
+            const resultError = document.getElementById('resultError');
+            resultError.innerHTML = message;
+            alertContainer.classList.remove('hidden');
+        }
+
+        function hideAlert() {
+            const alertContainer = document.getElementById('alertContainer');
+            alertContainer.classList.add('hidden');
+        }
+
+        document.getElementById('closeButton').addEventListener('click', hideAlert);
+
+        document.getElementById('txHashForm').addEventListener('submit', function(event) {
+            event.preventDefault();
+            resetToInitialState();
+            const SearchButton = document.getElementById('SearchBtn')
+            const wrapperDiv = document.getElementById('txHashForm');
+            wrapperDiv.removeChild(SearchButton)
+            const newButton = document.createElement('button')
+            newButton.textContent = 'Loading...'
+            newButton.className = 'px-8 py-5 bg-blue-600 text-white rounded-r-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg font-semibold'
+            newButton.style.backgroundColor = '#c1397b'
+            newButton.id = 'SearchBtn'
+            wrapperDiv.appendChild(newButton)
+            const txHash = document.getElementById('txHashInput').value.trim();
+            if (txHash) {
+                $.ajax({
+                    url: `http://192.168.2.135:6969/check_tx?tx_hash=${txHash}`,
+                    method: 'POST',
+                    success: function(response) {
+                        const data = response.data;
+
+                        if (response.bridge_name === 'LayerZero') {
+                            const bottom_container = document.getElementsByClassName('bottom-container');
+                            if (bottom_container.length > 0) {
+                                bottom_container[0].style.display = 'none'; // Hide the bottom container
+                            }
+
+                            document.getElementById('srcChain').textContent = data.src_chain;
+                            document.getElementById('dstChain').textContent = data.dst_chain;
+                            document.getElementById('srcAddress').textContent = abbreviateHash(data.src_address);
+                            document.getElementById('dstAddress').textContent = abbreviateHash(data.dst_address);
+
+                            // Update the srcTx element
+                            let srcTxEl = document.getElementById('srcTx');
+                            if (srcTxEl) {
+                                const srcTxLink = document.createElement('a');
+                                srcTxLink.href = data.src_tx_scanner;
+                                srcTxLink.target = "_blank";
+                                srcTxLink.textContent = abbreviateHash(data.src_tx_hash);
+                                srcTxLink.className = srcTxEl.className; // Copy the existing classes
+                                srcTxLink.id = 'srcTx'; // Maintain the same ID for future reference
+                                srcTxEl.parentNode.replaceChild(srcTxLink, srcTxEl);
+                            }
+
+                            // Update the dstTx element
+                            let dstTxEl = document.getElementById('dstTx');
+                            if (dstTxEl) {
+                                const dstTxLink = document.createElement('a');
+                                dstTxLink.href = data.dst_tx_scanner;
+                                dstTxLink.target = "_blank";
+                                dstTxLink.textContent = abbreviateHash(data.dst_tx_hash);
+                                dstTxLink.className = dstTxEl.className; // Copy the existing classes
+                                dstTxLink.id = 'dstTx'; // Maintain the same ID for future reference
+                                dstTxEl.parentNode.replaceChild(dstTxLink, dstTxEl);
+                            }
+
+                            document.getElementById('layerZeroTimestamp').textContent = new Date(data.timestamp).toLocaleString();
+                            return;
+                        }
+                        const bottom_container = document.getElementsByClassName('bottom-container');
+                            if (bottom_container.length > 0) {
+                                bottom_container[0].style.display = 'block'; // Hide the bottom container
+                            }
+
+                        document.getElementById('srcAddress').textContent = abbreviateHash(data.src_address);
+                        document.getElementById('srcAddressFull').value = data.src_address;
+
+                        document.getElementById('dstAddress').textContent = abbreviateHash(data.dst_address);
+                        document.getElementById('dstAddressFull').value = data.dst_address;
+
+                        document.getElementById('srcTx').textContent = abbreviateHash(data.src_tx_hash);
+                        document.getElementById('srcTxFull').value = data.src_tx_hash;
+
+                        document.getElementById('dstTx').textContent = abbreviateHash(data.dst_tx_hash);
+                        document.getElementById('dstTxFull').value = data.dst_tx_hash;
+
+                        document.getElementById('srcChain').textContent = data.src_chain;
+                        document.getElementById('dstChain').textContent = data.dst_chain;
+                        document.getElementById('tokenReceived').textContent = data.token_received;
+                        document.getElementById('tokenSent').textContent = data.token_sent;
+                        document.getElementById('bottomTokenReceived').textContent = data.token_received;
+                        document.getElementById('bottomTimestamp').textContent = data.timestamp;
+
+                        if (data.amount) {
+                            document.getElementById('buttomAmount').textContent = data.amount;
+                        } else {
+                            document.getElementById('buttomAmount').textContent = 'N/A';
+                        }
+
+                        if (data.dst_token_symbol) {
+                            document.getElementById('buttomDstTokenSymbol').textContent = data.token_received;
+                        } else {
+                            document.getElementById('buttomDstTokenSymbol').textContent = 'N/A';
+                        }
+                    },
+                    error: function(data) {
+                        console.log(data);
+                        showAlert(data.responseJSON.error);
+                    },
+                    complete: function() {
+                        wrapperDiv.removeChild(newButton)
+                        wrapperDiv.appendChild(SearchButton)
+                    }
+                })
+            }
+            else{
+                wrapperDiv.removeChild(newButton)
+                wrapperDiv.appendChild(SearchButton)
+            }
+        });
+    </script>
+    
+</body>
+</html>
